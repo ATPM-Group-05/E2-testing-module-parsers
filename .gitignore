@@ -1,0 +1,13 @@
+# Python / PyCharm files
+__pycache__/
+*.py[cod]
+*$py.class
+.idea/
+.venv/
+venv/
+ENV/
+
+# Output & Logs
+*.log
+logs/*
+!logs/.gitkeep
