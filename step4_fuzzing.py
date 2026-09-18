@@ -179,7 +179,7 @@ def execute_fuzzing(gateway_cls, fuzzer, iterations=10000):
 
 def print_comparison_table(results):
     print("=" * 105)
-    print("CHẶNG 5: KIỂM THỬ ĐỘNG FUZZING (SO SÁNH BLACK-BOX VS WHITE-BOX)")
+    print("CHẶNG 4: KIỂM THỬ ĐỘNG FUZZING (SO SÁNH BLACK-BOX VS WHITE-BOX)")
     print("=" * 105)
 
     headers = ["Chỉ số đánh giá", "Black-box (Target)", "White-box (Target)", "Black-box (Patched)", "White-box (Patched)"]

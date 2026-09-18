@@ -15,7 +15,7 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
 
 def run_smt_verification():
     print("=" * 80)
-    print("CHẶNG 4: KIỂM CHỨNG RÀNG BUỘC HÌNH THỨC SMT VỚI Z3 SOLVER")
+    print("CHẶNG 3: KIỂM CHỨNG RÀNG BUỘC HÌNH THỨC SMT VỚI Z3 SOLVER")
     print("=" * 80)
 
     print("\n[MỤC TIÊU 1] KIỂM CHỨNG TRÀN SỐ NGUYÊN (INTEGER OVERFLOW)")
