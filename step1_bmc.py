@@ -13,7 +13,6 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != 'utf-8':
     except AttributeError:
         pass
 
-# Khai báo Hằng số ở cấp Module chuẩn PEP8
 STATE_INIT = 0
 STATE_HEADER_PARSED = 1
 STATE_TOKEN_CHECKED = 2
@@ -54,28 +53,34 @@ def run_bmc_verification(max_k=3):
             s_curr = states[i]
             s_next = states[i + 1]
 
-            t_init_to_parsed = And(
+            t_init_to_parsed = Implies(
                 s_curr == BitVecVal(STATE_INIT, 4),
-                Implies(magic_valid == BitVecVal(1, 1), s_next == BitVecVal(STATE_HEADER_PARSED, 4)),
-                Implies(magic_valid == BitVecVal(0, 1), s_next == BitVecVal(STATE_ERROR, 4))
-            )
-
-            t_parsed_to_token = And(
-                s_curr == BitVecVal(STATE_HEADER_PARSED, 4),
-                Implies(
-                    Or(token_type == BitVecVal(TOKEN_VALID, 4), token_type == BitVecVal(TOKEN_BYPASS, 4)),
-                    s_next == BitVecVal(STATE_TOKEN_CHECKED, 4)
-                ),
-                Implies(
-                    And(token_type != BitVecVal(TOKEN_VALID, 4), token_type != BitVecVal(TOKEN_BYPASS, 4)),
-                    s_next == BitVecVal(STATE_ERROR, 4)
+                And(
+                    Implies(magic_valid == BitVecVal(1, 1), s_next == BitVecVal(STATE_HEADER_PARSED, 4)),
+                    Implies(magic_valid == BitVecVal(0, 1), s_next == BitVecVal(STATE_ERROR, 4))
                 )
             )
 
-            t_token_to_payload = And(
+            t_parsed_to_token = Implies(
+                s_curr == BitVecVal(STATE_HEADER_PARSED, 4),
+                And(
+                    Implies(
+                        Or(token_type == BitVecVal(TOKEN_VALID, 4), token_type == BitVecVal(TOKEN_BYPASS, 4)),
+                        s_next == BitVecVal(STATE_TOKEN_CHECKED, 4)
+                    ),
+                    Implies(
+                        And(token_type != BitVecVal(TOKEN_VALID, 4), token_type != BitVecVal(TOKEN_BYPASS, 4)),
+                        s_next == BitVecVal(STATE_ERROR, 4)
+                    )
+                )
+            )
+
+            t_token_to_payload = Implies(
                 s_curr == BitVecVal(STATE_TOKEN_CHECKED, 4),
-                Implies(UGT(ZeroExt(16, payload_len), BitVecVal(128, 32)), s_next == BitVecVal(STATE_ERROR, 4)),
-                Implies(ULE(ZeroExt(16, payload_len), BitVecVal(128, 32)), s_next == BitVecVal(STATE_PAYLOAD_PROCESSED, 4))
+                And(
+                    Implies(UGT(ZeroExt(16, payload_len), BitVecVal(128, 32)), s_next == BitVecVal(STATE_ERROR, 4)),
+                    Implies(ULE(ZeroExt(16, payload_len), BitVecVal(128, 32)), s_next == BitVecVal(STATE_PAYLOAD_PROCESSED, 4))
+                )
             )
 
             t_sink = Implies(
@@ -87,6 +92,7 @@ def run_bmc_verification(max_k=3):
 
         buf_overflow_cond = And(
             states[k] == BitVecVal(STATE_ERROR, 4),
+            states[k - 1] == BitVecVal(STATE_TOKEN_CHECKED, 4),
             UGT(ZeroExt(16, payload_len), BitVecVal(128, 32)),
             magic_valid == BitVecVal(1, 1)
         )
