@@ -34,18 +34,18 @@ Dự án nghiên cứu và triển khai kiểm thử an toàn toàn diện End-t
   - Áp dụng các điều kiện bảo vệ (Guard Conditions) theo thứ tự thực thi của Parser:
     - Khi $L < 6$: Parser từ chối ngay lập tức sang trạng thái `BLOCKED`, không phụ thuộc vào $P_2, P_3, P_4$.
     - Khi $M \ne \text{b"PASS"}$: Parser từ chối ngay lập tức sang `BLOCKED`, loại bỏ phụ thuộc $P_3, P_4$.
-  - Xác định 4 tham số chính tác động trực tiếp tới sự chuyển đổi trạng thái: $(P_{len\_valid}, P_{magic\_valid}, P_{token\_type}, P_{buffer\_safe})$.
+  - Xác định 4 tham số chính tác động trực tiếp tới sự chuyển đổi trạng thái: $(P_{\text{len\_valid}}, P_{\text{magic\_valid}}, P_{\text{token\_type}}, P_{\text{buffer\_safe}})$.
 
 ### 1.3. Đặc tả hình thức không gian 7 trạng thái
 | Trạng thái | Tên trạng thái | Ý nghĩa ngữ nghĩa | Điều kiện bất biến / Vào | Mệnh đề AP |
 | :--- | :--- | :--- | :--- | :--- |
-| **$S_0$** | `IDLE` | Khởi tạo, chờ nhận gói tin | $len(raw\_bytes) \ge 0$ | $is\_idle$ |
-| **$S_1$** | `PARSING_HEADER` | Đọc Magic 4B và Chiều dài khai báo 2B | $len(raw\_bytes) \ge 6$ | $hdr\_parsed$ |
-| **$S_2$** | `AUTHENTICATING` | Xác thực chuỗi Token bảo mật 32B | $M = \text{b"PASS"} \land L \ge 38$ | $tok\_checking$ |
-| **$S_3$** | `PROCESSING_PAYLOAD` | Kiểm tra biên bộ đệm và nạp dữ liệu | $T = \text{"SECRET\_TOKEN\_2026"}$ | $buf\_processing$ |
-| **$S_4$** | `GRANTED` | Chấp thuận truy cập (Terminal Success) | $is\_authenticated = True$ | $is\_granted$ |
-| **$S_5$** | `BLOCKED` | Từ chối an toàn (Terminal Safe Reject) | $Gói\ tin\ sai\ quy\ chuẩn\ \lor\ Token\ sai$ | $is\_blocked$ |
-| **$S_6$** | `CRASH_ERROR` | Lỗi sập bộ nhớ (Terminal Panic) | $N > 128$ (Chưa kiểm tra biên) | $is\_crash$ |
+| **$S_0$** | `IDLE` | Khởi tạo, chờ nhận gói tin | $\text{len}(\text{raw\_bytes}) \ge 0$ | $\text{is\_idle}$ |
+| **$S_1$** | `PARSING_HEADER` | Đọc Magic 4B và Chiều dài khai báo 2B | $\text{len}(\text{raw\_bytes}) \ge 6$ | $\text{hdr\_parsed}$ |
+| **$S_2$** | `AUTHENTICATING` | Xác thực chuỗi Token bảo mật 32B | $M = \text{b"PASS"} \land L \ge 38$ | $\text{tok\_checking}$ |
+| **$S_3$** | `PROCESSING_PAYLOAD` | Kiểm tra biên bộ đệm và nạp dữ liệu | $T = \text{"SECRET\_TOKEN\_2026"}$ | $\text{buf\_processing}$ |
+| **$S_4$** | `GRANTED` | Chấp thuận truy cập (Terminal Success) | $\text{is\_authenticated} = \text{True}$ | $\text{is\_granted}$ |
+| **$S_5$** | `BLOCKED` | Từ chối an toàn (Terminal Safe Reject) | Gói tin sai quy chuẩn $\lor$ Token sai | $\text{is\_blocked}$ |
+| **$S_6$** | `CRASH_ERROR` | Lỗi sập bộ nhớ (Terminal Panic) | $N > 128$ (Chưa kiểm tra biên) | $\text{is\_crash}$ |
 
 ### 1.4. Hệ thống ràng buộc (Constraints) & Bất biến an toàn
 - **Preconditions**:
@@ -55,10 +55,10 @@ Dự án nghiên cứu và triển khai kiểm thử an toàn toàn diện End-t
   - $S_2 \rightarrow S_3 \iff T = \text{"SECRET\_TOKEN\_2026"}$.
   - $S_3 \rightarrow S_4 \iff N \le 128 \land L \ge 38 + N$.
 - **Safety Invariants**:
-  - $\text{Inv}_1$: $AG(State = S_4 \implies T = \text{"SECRET\_TOKEN\_2026"})$ (Bảo toàn xác thực).
-  - $\text{Inv}_2$: $AG(State = S_3 \lor State = S_4 \implies N \le 128)$ (An toàn vùng đệm).
-  - $\text{Inv}_3$: $AG(State \ne S_6)$ (Không tồn tại đường dẫn dẫn tới Crash).
-  - $\text{Inv}_4$: $\forall N \in \mathbb{N}: (calculated\_offset \pmod 4 = 0)$ (Căn chỉnh bộ nhớ phần cứng).
+  - $\text{Inv}_1$: $AG(\text{State} = S_4 \implies T = \text{"SECRET\_TOKEN\_2026"})$ (Bảo toàn xác thực).
+  - $\text{Inv}_2$: $AG(\text{State} = S_3 \lor \text{State} = S_4 \implies N \le 128)$ (An toàn vùng đệm).
+  - $\text{Inv}_3$: $AG(\text{State} \ne S_6)$ (Không tồn tại đường dẫn dẫn tới Crash).
+  - $\text{Inv}_4$: $\forall N \in \mathbb{N}: (\text{calculated\_offset} \pmod 4 = 0)$ (Căn chỉnh bộ nhớ phần cứng).
 
 ### 1.5. Đặc tả các mệnh đề chuyển đổi trạng thái (Transition Propositions)
 Các mệnh đề logic chuyển trạng thái $\Phi(S_i, S_j)$:
@@ -71,7 +71,7 @@ Các mệnh đề logic chuyển trạng thái $\Phi(S_i, S_j)$:
 - $\Phi(S_2, S_5) \iff (s = S_2) \land (T \ne \text{'SECRET\_TOKEN\_2026'}) \land (s' = S_5)$
 - $\Phi(S_3, S_4) \iff (s = S_3) \land (N \le 128) \land (s' = S_4)$
 - $\Phi(S_3, S_6) \iff (s = S_3) \land (N > 128) \land (s' = S_6)$ *(Lỗ hổng Buffer Overflow)*
-- $\Phi_{sink}(s, s') \iff (s \in \{S_4, S_5, S_6\}) \land (s' = s)$ *(Self-loop bảo toàn quan hệ toàn phần)*
+- $\Phi_{\text{sink}}(s, s') \iff (s \in \{S_4, S_5, S_6\}) \land (s' = s)$ *(Self-loop bảo toàn quan hệ toàn phần)*
 
 Công thức quan hệ chuyển đổi toàn cục:
 $$T(s, s') \iff \bigvee_{i, j} \Phi(S_i, S_j)$$
@@ -83,12 +83,12 @@ $$T(s, s') \iff \bigvee_{i, j} \Phi(S_i, S_j)$$
 ### 2.1. Cấu trúc Kripke chính quy $M = (S, S_0, R, L, AP)$
 - $S = \{S_0, S_1, S_2, S_3, S_4, S_5, S_6\}$.
 - $S_0 = \{S_0\}$.
-- $AP = \{is\_idle, hdr\_parsed, tok\_checking, buf\_processing, is\_granted, is\_blocked, is\_crash\}$.
+- $AP = \{\text{is\_idle}, \text{hdr\_parsed}, \text{tok\_checking}, \text{buf\_processing}, \text{is\_granted}, \text{is\_blocked}, \text{is\_crash}\}$.
 - $R \subseteq S \times S$: Quan hệ toàn phần, các trạng thái kết thúc $S_4, S_5, S_6$ đều có self-loop $(s,s) \in R$.
 
 ### 2.2. Cơ sở toán học sinh Test Case từ BMC / Z3 Solver
-Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}(s_k)$, nếu Z3 Solver trả về `sat`, nghiệm của mô hình $M = \text{Model}(Solver)$ cung cấp trực tiếp vector giá trị đầu vào (Counterexample Valuation). Bộ giá trị này chính là cơ sở toán học khách quan để tổng hợp Test Cases biên:
-- **Nghiệm 1 ($K=2$)**: $Token = \text{"DEBUG\_BYPASS\_999"}$ sinh ra `TC_06_BYPASS_TOKEN_ATTACK`.
+Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}(s_k)$, nếu Z3 Solver trả về `sat`, nghiệm của mô hình $M = \text{Model}(\text{Solver})$ cung cấp trực tiếp vector giá trị đầu vào (Counterexample Valuation). Bộ giá trị này chính là cơ sở toán học khách quan để tổng hợp Test Cases biên:
+- **Nghiệm 1 ($K=2$)**: $T = \text{"DEBUG\_BYPASS\_999"}$ sinh ra `TC_06_BYPASS_TOKEN_ATTACK`.
 - **Nghiệm 2 ($K=4$)**: $N = 129, 512 > 128$ sinh ra `TC_10_OVERFLOW_BOUNDARY_129` và `TC_11_OVERFLOW_LARGE_512`.
 - **Nghiệm 3 (Integer Overflow)**: $N = 16384, 65535$ sinh ra `TC_12_INTEGER_OVERFLOW_16384` và `TC_13_INTEGER_OVERFLOW_MAX_UINT16`.
 
@@ -110,7 +110,7 @@ Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}
   - Kiểm tra độ dài $\ge 38$ ngay tại header guard.
   - Kiểm tra biên $N \le 128$ trước khi xử lý tải, chặn mọi nguy cơ `MemoryError`.
   - Triệt tiêu cửa sau `DEBUG_BYPASS_999`.
-  - Căn chỉnh bộ nhớ: Bổ sung 2 bytes padding thành $Offset = 8 + 4N$, đảm bảo $Offset \pmod 4 = 0$.
+  - Căn chỉnh bộ nhớ: Bổ sung 2 bytes padding thành $\text{Offset} = 8 + 4N$, đảm bảo $\text{Offset} \pmod 4 = 0$.
   - Tích hợp ghi nhận cạnh đường đi (Path Edge Tracing) phục vụ đo lường Coverage.
 - Tự động sinh bộ ca kiểm thử chuyển đổi trạng thái Kripke (`test_cases.json`): 13 ca kiểm thử phủ kín 100% các nhánh chuyển đổi.
 
