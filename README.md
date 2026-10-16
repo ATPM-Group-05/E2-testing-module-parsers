@@ -1,10 +1,10 @@
-# End-to-End Testing cho Module Parsers của Authentication Gateway
+# Quy Trình Đánh Giá An Toàn End-to-End Cho Module Parsers Của Authentication Gateway
 
-Dự án nghiên cứu và triển khai kiểm thử an toàn toàn diện cho module phân tích gói tin (parser) của Authentication Gateway trong học phần **An toàn phần mềm - K17 CNTT Phenikaa University**.
+Dự án nghiên cứu và triển khai kiểm thử an toàn toàn diện End-to-End cho module phân tích gói tin (parser) của Authentication Gateway trong môn học An toàn phần mềm.
 
-Nội dung đề tài tập trung vào 3 trọng tâm kỹ thuật:
-1. **Đặc tả hình thức Gateway Auth**: Phân tích tham số, tính tổ hợp xác định tham số chính, đặc tả không gian 7 trạng thái và toàn bộ các mệnh đề chuyển đổi trạng thái $\Phi(S_i, S_j)$.
-2. **Kiểm chứng hình thức BMC/Z3 & Mô hình phân loại lỗi**: Thiết lập hệ thống ràng buộc an toàn, cơ sở toán học sinh Test Cases từ nghiệm phản chứng (Counterexamples) của Z3 Solver, chuẩn hóa theo mô hình phân loại lỗi CWE.
+Đề tài tập trung giải quyết trọn vẹn 3 yêu cầu cốt lõi:
+1. **Đặc tả hình thức Gateway Auth**: Phân tích tham số, tính tổ hợp xác định các tham số chính, đặc tả không gian 7 trạng thái và toàn bộ các mệnh đề chuyển đổi trạng thái $\Phi(S_i, S_j)$.
+2. **Kiểm chứng hình thức BMC/Z3 & Mô hình phân loại lỗi**: Thiết lập hệ thống ràng buộc an toàn, cơ sở toán học sinh Test Cases từ nghiệm phản chứng (Counterexamples) của Z3 SMT Solver, chuẩn hóa theo mô hình phân loại lỗi CWE.
 3. **Kiểm thử động Fuzzing**: Thực nghiệm Bounded Fuzzing (Black-box vs White-box), phát hiện phân loại lỗi Crash và Hang, đo lường độ bao phủ cạnh (Edge Coverage) và số lượng đường đi thực thi độc nhất (Path Tracing).
 
 ---
@@ -47,7 +47,20 @@ Nội dung đề tài tập trung vào 3 trọng tâm kỹ thuật:
 | **$S_5$** | `BLOCKED` | Từ chối an toàn (Terminal Safe Reject) | $Gói\ tin\ sai\ quy\ chuẩn\ \lor\ Token\ sai$ | $is\_blocked$ |
 | **$S_6$** | `CRASH_ERROR` | Lỗi sập bộ nhớ (Terminal Panic) | $N > 128$ (Chưa kiểm tra biên) | $is\_crash$ |
 
-### 1.4. Đặc tả các mệnh đề chuyển đổi trạng thái (Transition Propositions)
+### 1.4. Hệ thống ràng buộc (Constraints) & Bất biến an toàn
+- **Preconditions**:
+  - $S_0 \rightarrow S_1 \iff L \ge 6$.
+- **Transition Guards**:
+  - $S_1 \rightarrow S_2 \iff M = \text{b"PASS"} \land L \ge 38$.
+  - $S_2 \rightarrow S_3 \iff T = \text{"SECRET\_TOKEN\_2026"}$.
+  - $S_3 \rightarrow S_4 \iff N \le 128 \land L \ge 38 + N$.
+- **Safety Invariants**:
+  - $\text{Inv}_1$: $AG(State = S_4 \implies T = \text{"SECRET\_TOKEN\_2026"})$ (Bảo toàn xác thực).
+  - $\text{Inv}_2$: $AG(State = S_3 \lor State = S_4 \implies N \le 128)$ (An toàn vùng đệm).
+  - $\text{Inv}_3$: $AG(State \ne S_6)$ (Không tồn tại đường dẫn dẫn tới Crash).
+  - $\text{Inv}_4$: $\forall N \in \mathbb{N}: (calculated\_offset \pmod 4 = 0)$ (Căn chỉnh bộ nhớ phần cứng).
+
+### 1.5. Đặc tả các mệnh đề chuyển đổi trạng thái (Transition Propositions)
 Các mệnh đề logic chuyển trạng thái $\Phi(S_i, S_j)$:
 - $\Phi(S_0, S_1) \iff (s = S_0) \land (L \ge 6) \land (s' = S_1)$
 - $\Phi(S_0, S_5) \iff (s = S_0) \land (L < 6) \land (s' = S_5)$
@@ -74,7 +87,7 @@ $$T(s, s') \iff \bigvee_{i, j} \Phi(S_i, S_j)$$
 - $R \subseteq S \times S$: Quan hệ toàn phần, các trạng thái kết thúc $S_4, S_5, S_6$ đều có self-loop $(s,s) \in R$.
 
 ### 2.2. Cơ sở toán học sinh Test Case từ BMC / Z3 Solver
-Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}(s_k)$, nếu Z3 Solver trả về `sat`, nghiệm của mô hình $M = \text{Model}(Solver)$ cung cấp trực tiếp vector giá trị đầu vào (Counterexample Valuation). Bộ giá trị này chính là cơ sở toán học khách quan để tổng hợp Test Cases:
+Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}(s_k)$, nếu Z3 Solver trả về `sat`, nghiệm của mô hình $M = \text{Model}(Solver)$ cung cấp trực tiếp vector giá trị đầu vào (Counterexample Valuation). Bộ giá trị này chính là cơ sở toán học khách quan để tổng hợp Test Cases biên:
 - **Nghiệm 1 ($K=2$)**: $Token = \text{"DEBUG\_BYPASS\_999"}$ sinh ra `TC_06_BYPASS_TOKEN_ATTACK`.
 - **Nghiệm 2 ($K=4$)**: $N = 129, 512 > 128$ sinh ra `TC_10_OVERFLOW_BOUNDARY_129` và `TC_11_OVERFLOW_LARGE_512`.
 - **Nghiệm 3 (Integer Overflow)**: $N = 16384, 65535$ sinh ra `TC_12_INTEGER_OVERFLOW_16384` và `TC_13_INTEGER_OVERFLOW_MAX_UINT16`.
