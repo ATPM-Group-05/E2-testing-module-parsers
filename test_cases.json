@@ -3,6 +3,7 @@
     "id": "TC_01_EMPTY_PACKET",
     "description": "Gói tin rỗng kích hoạt chuyển S0 -> S5 (BLOCKED)",
     "kripke_transition": "S0 -> S5",
+    "z3_bmc_basis": "Ràng buộc tiền điều kiện L < 6",
     "raw_bytes_hex": "",
     "expected_target_state": "BLOCKED",
     "expected_generated_state": "BLOCKED"
@@ -11,6 +12,7 @@
     "id": "TC_02_SHORT_HEADER",
     "description": "Gói tin chỉ có 4 bytes magic thiếu trường length",
     "kripke_transition": "S0 -> S5",
+    "z3_bmc_basis": "Ràng buộc tiền điều kiện L < 6",
     "raw_bytes_hex": "50415353",
     "expected_target_state": "BLOCKED",
     "expected_generated_state": "BLOCKED"
@@ -19,6 +21,7 @@
     "id": "TC_03_SHORT_TOKEN",
     "description": "Gói tin có 6 bytes header nhưng thiếu trường token 32B",
     "kripke_transition": "S1 -> S5",
+    "z3_bmc_basis": "Ràng buộc thẩm định độ dài gói tin L < 38",
     "raw_bytes_hex": "50415353000a",
     "expected_target_state": "BLOCKED",
     "expected_generated_state": "BLOCKED"
@@ -27,6 +30,7 @@
     "id": "TC_04_INVALID_MAGIC",
     "description": "Gói tin mang Magic Header sai quy định (FAIL)",
     "kripke_transition": "S1 -> S5",
+    "z3_bmc_basis": "Ràng buộc Magic Header M != PASS",
     "raw_bytes_hex": "4641494c000a4141414141414141414141414141414141414141414141414141414141414141",
     "expected_target_state": "BLOCKED",
     "expected_generated_state": "BLOCKED"
@@ -35,6 +39,7 @@
     "id": "TC_05_INVALID_TOKEN",
     "description": "Gói tin mang Magic đúng nhưng Token không hợp lệ",
     "kripke_transition": "S2 -> S5",
+    "z3_bmc_basis": "Ràng buộc xác thực token T != SECRET_TOKEN_2026",
     "raw_bytes_hex": "50415353000a5858585858585858585858585858585858585858585858585858585858585858",
     "expected_target_state": "BLOCKED",
     "expected_generated_state": "BLOCKED"
@@ -42,7 +47,8 @@
   {
     "id": "TC_06_BYPASS_TOKEN_ATTACK",
     "description": "Gói tin tấn công cửa sau DEBUG_BYPASS_999",
-    "kripke_transition": "S1 -> S4 (Target) vs S2 -> S5 (Generated)",
+    "kripke_transition": "S1 -> S4 (Target) vs S1 -> S2 -> S5 (Generated)",
+    "z3_bmc_basis": "Nghiệm phản chứng Z3 BMC: Token_Type == TOKEN_BYPASS tại K=2",
     "raw_bytes_hex": "50415353000a44454255475f4259504153535f39393900000000000000000000000000000000",
     "expected_target_state": "GRANTED",
     "expected_generated_state": "BLOCKED"
@@ -51,6 +57,7 @@
     "id": "TC_07_VALID_PAYLOAD_MIN",
     "description": "Xác thực hợp lệ với Payload tối thiểu (0 bytes)",
     "kripke_transition": "S0 -> S1 -> S2 -> S3 -> S4",
+    "z3_bmc_basis": "Phân hoạch giá trị biên an toàn: N = 0",
     "raw_bytes_hex": "5041535300005345435245545f544f4b454e5f32303236000000000000000000000000000000",
     "expected_target_state": "GRANTED",
     "expected_generated_state": "GRANTED"
@@ -59,6 +66,7 @@
     "id": "TC_08_VALID_PAYLOAD_NOMINAL",
     "description": "Xác thực hợp lệ với Payload 64 bytes thông thường",
     "kripke_transition": "S0 -> S1 -> S2 -> S3 -> S4",
+    "z3_bmc_basis": "Phân hoạch giá trị tương đương: N = 64 <= 128",
     "raw_bytes_hex": "5041535300405345435245545f544f4b454e5f3230323600000000000000000000000000000044444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444444",
     "expected_target_state": "GRANTED",
     "expected_generated_state": "GRANTED"
@@ -67,6 +75,7 @@
     "id": "TC_09_VALID_PAYLOAD_MAX",
     "description": "Xác thực hợp lệ tại biên trên an toàn (128 bytes)",
     "kripke_transition": "S0 -> S1 -> S2 -> S3 -> S4",
+    "z3_bmc_basis": "Phân hoạch giá trị biên an toàn cực đại: N = 128",
     "raw_bytes_hex": "5041535300805345435245545f544f4b454e5f323032360000000000000000000000000000004d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d",
     "expected_target_state": "GRANTED",
     "expected_generated_state": "GRANTED"
@@ -75,6 +84,7 @@
     "id": "TC_10_OVERFLOW_BOUNDARY_129",
     "description": "Tấn công tràn bộ đệm tại giá trị biên 129 bytes (> 128)",
     "kripke_transition": "S3 -> S6 (Target Crash) vs S1 -> S5 (Generated Blocked)",
+    "z3_bmc_basis": "Nghiệm phản chứng Z3 BMC: UGT(payload_len, 128) tại K=4",
     "raw_bytes_hex": "5041535300815345435245545f544f4b454e5f32303236000000000000000000000000000000454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545454545",
     "expected_target_state": "CRASH_ERROR",
     "expected_generated_state": "BLOCKED"
@@ -83,6 +93,7 @@
     "id": "TC_11_OVERFLOW_LARGE_512",
     "description": "Tấn công tràn bộ đệm tải lớn 512 bytes",
     "kripke_transition": "S3 -> S6 (Target Crash) vs S1 -> S5 (Generated Blocked)",
+    "z3_bmc_basis": "Nghiệm phản chứng Z3 SMT: Reachability Buffer Overflow N = 512",
     "raw_bytes_hex": "5041535302005345435245545f544f4b454e5f323032360000000000000000000000000000004f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f4f",
     "expected_target_state": "CRASH_ERROR",
     "expected_generated_state": "BLOCKED"
@@ -91,6 +102,7 @@
     "id": "TC_12_INTEGER_OVERFLOW_16384",
     "description": "Tấn công tràn số nguyên phép tính offset (payload_len = 16384)",
     "kripke_transition": "S3 -> S6 (Target Crash) vs S1 -> S5 (Generated Blocked)",
+    "z3_bmc_basis": "Nghiệm phản chứng Z3 SMT: Integer Overflow 16-bit wrap-around",
     "raw_bytes_hex": "5041535340005345435245545f544f4b454e5f323032360000000000000000000000000000004949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949494949",
     "expected_target_state": "CRASH_ERROR",
     "expected_generated_state": "BLOCKED"
@@ -99,6 +111,7 @@
     "id": "TC_13_INTEGER_OVERFLOW_MAX_UINT16",
     "description": "Tấn công giá trị cực đại uint16 (payload_len = 65535)",
     "kripke_transition": "S3 -> S6 (Target Crash) vs S1 -> S5 (Generated Blocked)",
+    "z3_bmc_basis": "Nghiệm phản chứng Z3 SMT: Maximum uint16 boundary wrap-around",
     "raw_bytes_hex": "50415353ffff5345435245545f544f4b454e5f323032360000000000000000000000000000005a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
     "expected_target_state": "CRASH_ERROR",
     "expected_generated_state": "BLOCKED"

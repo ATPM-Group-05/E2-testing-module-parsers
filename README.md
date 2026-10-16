@@ -3,13 +3,13 @@
 Dự án nghiên cứu và triển khai kiểm thử an toàn toàn diện cho module phân tích gói tin (parser) của Authentication Gateway trong học phần **An toàn phần mềm - K17 CNTT Phenikaa University**.
 
 Nội dung đề tài tập trung vào 3 trọng tâm kỹ thuật:
-1. **Phân tích tham số Gateway Auth**: Phân tích chi tiết số lượng tham số tham gia -> Tính tổ hợp xác định các tham số chính -> Đưa ra không gian trạng thái -> Thiết lập hệ thống ràng buộc.
-2. **Mô hình hóa Cấu trúc Kripke**: Xây dựng cấu trúc Kripke chính quy $M = (S, S_0, R, L, AP)$ cho toàn bộ các chuyển đổi trạng thái và kiểm chứng mô hình hình thức BMC (Bounded Model Checking) với Z3 SMT Solver.
-3. **Chu trình kiểm thử**: **Sinh mã** $\rightarrow$ **Kiểm thử tĩnh** $\rightarrow$ **Kiểm thử động**.
+1. **Đặc tả hình thức Gateway Auth**: Phân tích tham số, tính tổ hợp xác định tham số chính, đặc tả không gian 7 trạng thái và toàn bộ các mệnh đề chuyển đổi trạng thái $\Phi(S_i, S_j)$.
+2. **Kiểm chứng hình thức BMC/Z3 & Mô hình phân loại lỗi**: Thiết lập hệ thống ràng buộc an toàn, cơ sở toán học sinh Test Cases từ nghiệm phản chứng (Counterexamples) của Z3 Solver, chuẩn hóa theo mô hình phân loại lỗi CWE.
+3. **Kiểm thử động Fuzzing**: Thực nghiệm Bounded Fuzzing (Black-box vs White-box), phát hiện phân loại lỗi Crash và Hang, đo lường độ bao phủ cạnh (Edge Coverage) và số lượng đường đi thực thi độc nhất (Path Tracing).
 
 ---
 
-## 1. Phân Tích Tham Số và Tính Tổ Hợp (Gateway Auth)
+## 1. Đặc Tả Trạng Thái và Mệnh Đề Chuyển Đổi (Gateway Auth)
 
 ### 1.1. Bảng tham số đầu vào của Parser
 | Ký hiệu | Tên tham số | Kiểu dữ liệu | Ý nghĩa | Phân hoạch tương đương |
@@ -36,55 +36,57 @@ Nội dung đề tài tập trung vào 3 trọng tâm kỹ thuật:
     - Khi $M \ne \text{b"PASS"}$: Parser từ chối ngay lập tức sang `BLOCKED`, loại bỏ phụ thuộc $P_3, P_4$.
   - Xác định 4 tham số chính tác động trực tiếp tới sự chuyển đổi trạng thái: $(P_{len\_valid}, P_{magic\_valid}, P_{token\_type}, P_{buffer\_safe})$.
 
-### 1.3. Không gian trạng thái hữu hạn (7 trạng thái)
-1. **$S_0$ (`IDLE`)**: Trạng thái khởi tạo, sẵn sàng nhận gói tin.
-2. **$S_1$ (`PARSING_HEADER`)**: Phân tích trường Magic và độ dài dữ liệu khai báo.
-3. **$S_2$ (`AUTHENTICATING`)**: Kiểm tra và xác thực Token.
-4. **$S_3$ (`PROCESSING_PAYLOAD`)**: Kiểm tra biên bộ đệm và trích xuất dữ liệu tải.
-5. **$S_4$ (`GRANTED`)**: Cấp quyền truy cập thành công (Success Sink).
-6. **$S_5$ (`BLOCKED`)**: Từ chối an toàn khi phát hiện sai phạm hoặc dị dạng (Safe Sink).
-7. **$S_6$ (`CRASH_ERROR`)**: Trạng thái lỗi nghiêm trọng / Tràn bộ nhớ (Failure Sink).
+### 1.3. Đặc tả hình thức không gian 7 trạng thái
+| Trạng thái | Tên trạng thái | Ý nghĩa ngữ nghĩa | Điều kiện bất biến / Vào | Mệnh đề AP |
+| :--- | :--- | :--- | :--- | :--- |
+| **$S_0$** | `IDLE` | Khởi tạo, chờ nhận gói tin | $len(raw\_bytes) \ge 0$ | $is\_idle$ |
+| **$S_1$** | `PARSING_HEADER` | Đọc Magic 4B và Chiều dài khai báo 2B | $len(raw\_bytes) \ge 6$ | $hdr\_parsed$ |
+| **$S_2$** | `AUTHENTICATING` | Xác thực chuỗi Token bảo mật 32B | $M = \text{b"PASS"} \land L \ge 38$ | $tok\_checking$ |
+| **$S_3$** | `PROCESSING_PAYLOAD` | Kiểm tra biên bộ đệm và nạp dữ liệu | $T = \text{"SECRET\_TOKEN\_2026"}$ | $buf\_processing$ |
+| **$S_4$** | `GRANTED` | Chấp thuận truy cập (Terminal Success) | $is\_authenticated = True$ | $is\_granted$ |
+| **$S_5$** | `BLOCKED` | Từ chối an toàn (Terminal Safe Reject) | $Gói\ tin\ sai\ quy\ chuẩn\ \lor\ Token\ sai$ | $is\_blocked$ |
+| **$S_6$** | `CRASH_ERROR` | Lỗi sập bộ nhớ (Terminal Panic) | $N > 128$ (Chưa kiểm tra biên) | $is\_crash$ |
 
-### 1.4. Hệ thống ràng buộc (Constraints)
-- **Preconditions**:
-  - $S_0 \rightarrow S_1 \iff L \ge 6$.
-- **Transition Guards**:
-  - $S_1 \rightarrow S_2 \iff M = \text{b"PASS"} \land L \ge 38$.
-  - $S_2 \rightarrow S_3 \iff T = \text{"SECRET\_TOKEN\_2026"}$.
-  - $S_3 \rightarrow S_4 \iff N \le 128 \land L \ge 38 + N$.
-- **Safety Invariants**:
-  - $\text{Inv}_1$: $AG(State = S_4 \implies T = \text{"SECRET\_TOKEN\_2026"})$.
-  - $\text{Inv}_2$: $AG(State = S_3 \lor State = S_4 \implies N \le 128)$.
-  - $\text{Inv}_3$: $AG(State \ne S_6)$ (Không tồn tại đường dẫn dẫn tới Crash).
-  - $\text{Inv}_4$: $\forall N \in \mathbb{N}: (calculated\_offset \pmod 4 = 0)$.
+### 1.4. Đặc tả các mệnh đề chuyển đổi trạng thái (Transition Propositions)
+Các mệnh đề logic chuyển trạng thái $\Phi(S_i, S_j)$:
+- $\Phi(S_0, S_1) \iff (s = S_0) \land (L \ge 6) \land (s' = S_1)$
+- $\Phi(S_0, S_5) \iff (s = S_0) \land (L < 6) \land (s' = S_5)$
+- $\Phi(S_1, S_2) \iff (s = S_1) \land (M = \text{'PASS'}) \land (T \ne \text{'DEBUG\_BYPASS\_999'}) \land (s' = S_2)$
+- $\Phi(S_1, S_4) \iff (s = S_1) \land (M = \text{'PASS'}) \land (T = \text{'DEBUG\_BYPASS\_999'}) \land (s' = S_4)$ *(Lỗ hổng Backdoor)*
+- $\Phi(S_1, S_5) \iff (s = S_1) \land (M \ne \text{'PASS'} \lor L < 38) \land (s' = S_5)$
+- $\Phi(S_2, S_3) \iff (s = S_2) \land (T = \text{'SECRET\_TOKEN\_2026'}) \land (s' = S_3)$
+- $\Phi(S_2, S_5) \iff (s = S_2) \land (T \ne \text{'SECRET\_TOKEN\_2026'}) \land (s' = S_5)$
+- $\Phi(S_3, S_4) \iff (s = S_3) \land (N \le 128) \land (s' = S_4)$
+- $\Phi(S_3, S_6) \iff (s = S_3) \land (N > 128) \land (s' = S_6)$ *(Lỗ hổng Buffer Overflow)*
+- $\Phi_{sink}(s, s') \iff (s \in \{S_4, S_5, S_6\}) \land (s' = s)$ *(Self-loop bảo toàn quan hệ toàn phần)*
+
+Công thức quan hệ chuyển đổi toàn cục:
+$$T(s, s') \iff \bigvee_{i, j} \Phi(S_i, S_j)$$
 
 ---
 
-## 2. Cấu Trúc Kripke và Kiểm Chứng Mô Hình BMC
+## 2. Cấu Trúc Kripke, BMC và Mô Hình Phân Loại Lỗi
 
-### 2.1. Định nghĩa hình thức Cấu trúc Kripke $M = (S, S_0, R, L, AP)$
+### 2.1. Cấu trúc Kripke chính quy $M = (S, S_0, R, L, AP)$
 - $S = \{S_0, S_1, S_2, S_3, S_4, S_5, S_6\}$.
 - $S_0 = \{S_0\}$.
-- $AP = \{is\_idle, hdr\_ok, hdr\_fail, tok\_ok, tok\_bypass, tok\_fail, buf\_ok, buf\_overflow, is\_granted, is\_blocked, is\_crash\}$.
-- $L: S \rightarrow 2^{AP}$.
-- $R \subseteq S \times S$: Quan hệ toàn phần, các trạng thái sink $S_4, S_5, S_6$ đều có self-loop $(s,s) \in R$.
+- $AP = \{is\_idle, hdr\_parsed, tok\_checking, buf\_processing, is\_granted, is\_blocked, is\_crash\}$.
+- $R \subseteq S \times S$: Quan hệ toàn phần, các trạng thái kết thúc $S_4, S_5, S_6$ đều có self-loop $(s,s) \in R$.
 
-### 2.2. Ma trận chuyển đổi trạng thái Kripke
-| Nguồn ($s$) | $S_0$ | $S_1$ | $S_2$ | $S_3$ | $S_4$ | $S_5$ | $S_6$ |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **$S_0$: IDLE** | 0 | 1 | 0 | 0 | 0 | 1 | 0 |
-| **$S_1$: PARSING_HEADER** | 0 | 0 | 1 | 0 | 1* | 1 | 0 |
-| **$S_2$: AUTHENTICATING** | 0 | 0 | 0 | 1 | 0 | 1 | 0 |
-| **$S_3$: PROCESSING_PAYLOAD** | 0 | 0 | 0 | 0 | 1 | 1 | 1* |
-| **$S_4$: GRANTED (Sink)** | 0 | 0 | 0 | 0 | 1 | 0 | 0 |
-| **$S_5$: BLOCKED (Sink)** | 0 | 0 | 0 | 0 | 0 | 1 | 0 |
-| **$S_6$: CRASH_ERROR (Sink)** | 0 | 0 | 0 | 0 | 0 | 0 | 1 |
+### 2.2. Cơ sở toán học sinh Test Case từ BMC / Z3 Solver
+Khi giải phủ định của các bất biến an toàn $\neg \text{Invariant}(s_k)$, nếu Z3 Solver trả về `sat`, nghiệm của mô hình $M = \text{Model}(Solver)$ cung cấp trực tiếp vector giá trị đầu vào (Counterexample Valuation). Bộ giá trị này chính là cơ sở toán học khách quan để tổng hợp Test Cases:
+- **Nghiệm 1 ($K=2$)**: $Token = \text{"DEBUG\_BYPASS\_999"}$ sinh ra `TC_06_BYPASS_TOKEN_ATTACK`.
+- **Nghiệm 2 ($K=4$)**: $N = 129, 512 > 128$ sinh ra `TC_10_OVERFLOW_BOUNDARY_129` và `TC_11_OVERFLOW_LARGE_512`.
+- **Nghiệm 3 (Integer Overflow)**: $N = 16384, 65535$ sinh ra `TC_12_INTEGER_OVERFLOW_16384` và `TC_13_INTEGER_OVERFLOW_MAX_UINT16`.
 
-*Ghi chú*: `1*` là các chuyển đổi chứa lỗ hổng an toàn trên mã lỗi ($S_1 \rightarrow S_4$ qua backdoor và $S_3 \rightarrow S_6$ qua tràn buffer).
-
-### 2.3. Bounded Model Checking (BMC) với Z3 SMT Solver
-- **$K = 2$**: Z3 phát hiện Counterexample vi phạm bất biến xác thực ($S_0 \rightarrow S_1 \rightarrow S_4$ thông qua token `DEBUG_BYPASS_999`).
-- **$K = 4$**: Z3 phát hiện Counterexample vi phạm an toàn bộ nhớ ($S_0 \rightarrow S_1 \rightarrow S_2 \rightarrow S_3 \rightarrow S_6$ với $N > 128$).
+### 2.3. Mô hình phân loại lỗi an toàn phần mềm (CWE Fault Model)
+| Chuẩn CWE | Tên phân loại lỗi | Mức độ | Target Gateway | Generated Gateway |
+| :--- | :--- | :---: | :---: | :---: |
+| **CWE-287 / CWE-798** | Hardcoded Backdoor / Improper Auth | CRITICAL | VULNERABLE (`sat`) | SECURED (`unsat`) |
+| **CWE-120 / CWE-122** | Buffer Copy without Bounds Check | CRITICAL | VULNERABLE (`sat`) | SECURED (`unsat`) |
+| **CWE-190** | Integer Overflow / 16-bit Wraparound | HIGH | VULNERABLE (`sat`) | SECURED (`unsat`) |
+| **CWE-119 / CWE-787** | Improper Memory Hardware Alignment | MEDIUM | VULNERABLE (`sat`) | SECURED (`unsat`) |
+| **CWE-1284** | Insufficient Input Length Validation | MEDIUM | VULNERABLE (AST) | SECURED (Safe Guard) |
 
 ---
 
@@ -96,31 +98,30 @@ Nội dung đề tài tập trung vào 3 trọng tâm kỹ thuật:
   - Kiểm tra biên $N \le 128$ trước khi xử lý tải, chặn mọi nguy cơ `MemoryError`.
   - Triệt tiêu cửa sau `DEBUG_BYPASS_999`.
   - Căn chỉnh bộ nhớ: Bổ sung 2 bytes padding thành $Offset = 8 + 4N$, đảm bảo $Offset \pmod 4 = 0$.
+  - Tích hợp ghi nhận cạnh đường đi (Path Edge Tracing) phục vụ đo lường Coverage.
 - Tự động sinh bộ ca kiểm thử chuyển đổi trạng thái Kripke (`test_cases.json`): 13 ca kiểm thử phủ kín 100% các nhánh chuyển đổi.
 
 ### Giai đoạn 2: Kiểm thử tĩnh (Static Testing) - `step3_static_testing.py`
-- **Phân tích AST**:
-  - Phát hiện `HARDCODED_BACKDOOR`, `MISALIGNED_OFFSET_CALC`, `MISSING_EARLY_BOUNDS_CHECK`, `INSUFFICIENT_LENGTH_GUARD`.
-  - Xác nhận bản sinh mã đạt chuẩn an toàn 100%.
-- **Kiểm chứng SMT bằng Z3 Solver**:
-  - Integer Overflow: Target `SAT` vs Generated `UNSAT` (chứng minh an toàn tuyệt đối).
-  - Memory Alignment: Target vi phạm dư 2 vs Generated `UNSAT` (chia hết cho 4).
-  - Buffer Overflow: Target `SAT` vs Generated `UNSAT`.
-  - Auth Invariant: Target `SAT` vs Generated `UNSAT`.
+- **Phân tích cú pháp AST**: Quét phát hiện toàn bộ các mẫu vi phạm CWE trên mã cũ và chứng nhận mã sinh an toàn 100%.
+- **Kiểm chứng SMT bằng Z3 Solver**: Cả 4 bài toán hình thức đều chứng minh mã sinh đạt `unsat` trên điều kiện lỗi.
 
-### Giai đoạn 3: Kiểm thử động (Dynamic Testing) - `step4_dynamic_testing.py`
-- **Kiểm thử bộ test Kripke**:
-  - Độ bao phủ 13/13 ca kiểm thử (100.0% PASS trên Generated Gateway).
-- **Kiểm thử Fuzzing động (10,000 iterations)**:
-  - So sánh Black-box vs White-box (nhận thức cấu trúc và biên tham số).
-  - Kết quả trên Target Gateway: White-box phát hiện 1,443 lần Crash (ngay từ lần lặp thứ 3) và 2,649 lần Bypass (ngay từ lần lặp thứ 2).
-  - Kết quả trên Generated Gateway: 0 lần Crash, 0 lần Bypass, 100% từ chối an toàn.
+### Giai đoạn 3: Kiểm thử động Fuzzing (Dynamic Testing) - `step4_dynamic_testing.py`
+- **Ràng buộc kiểm thử Bounded Fuzzing**:
+  - Giới hạn số lần lặp: $K = 10,000$ iterations.
+  - Giới hạn kích thước gói: $0 \le L \le 512$ bytes.
+  - Giới hạn thời gian tối đa mỗi gói: $T \le 50$ms.
+- **Phân loại lỗi Crash và Hang**:
+  - Số lần Crash (`MemoryError`): Target = 1,497 lần (14.97%) | Generated = 0 lần.
+  - Số lần Hang (Treo tiến trình): 0 lần trên cả hai phiên bản.
+- **Đo lường Edge Coverage & Path Tracing**:
+  - Black-box: Độ bao phủ cạnh chỉ đạt 30.0% - 50.0% với 2 đường đi độc nhất (chủ yếu bị chặn sớm tại `E_LEN_FAIL`).
+  - White-box: Độ bao phủ cạnh đạt **100.0%** với 5 đường đi độc nhất, kích hoạt toàn bộ các nhánh rẽ và giá trị biên.
 
 ---
 
 ## 4. Hướng Dẫn Chạy Toàn Bộ Dự Án
 
-### Cài đặt thư viện:
+### Cài đặt môi trường:
 ```bash
 pip install -r requirements.txt
 ```
@@ -132,15 +133,15 @@ python main.py
 
 ### Chạy từng giai đoạn độc lập:
 ```bash
-# Phân tích tham số, cấu trúc Kripke & BMC Z3
+# Giai đoạn 1: Phân tích tham số, cấu trúc Kripke, mệnh đề chuyển đổi & BMC Z3
 python step1_kripke_analysis.py
 
-# Sinh mã Gateway an toàn và sinh test suite Kripke
+# Giai đoạn 2: Sinh mã Gateway an toàn và sinh test suite từ Z3 counterexamples
 python step2_codegen.py
 
-# Kiểm thử tĩnh (AST & Formal SMT Verification)
+# Giai đoạn 3: Kiểm thử tĩnh (Mô hình phân loại lỗi CWE, AST & Formal SMT)
 python step3_static_testing.py
 
-# Kiểm thử động (Kripke Test Suite & Fuzzing 10,000 iterations)
+# Giai đoạn 4: Kiểm thử động (Bounded Fuzzing, Crash/Hang, Edge Coverage, Path Tracing)
 python step4_dynamic_testing.py
 ```

@@ -15,6 +15,58 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() != "utf-8":
     except AttributeError:
         pass
 
+FAULT_CLASSIFICATION_MODEL = [
+    {
+        "cwe_id": "CWE-287 / CWE-798",
+        "fault_name": "Improper Authentication / Hardcoded Backdoor",
+        "severity": "CRITICAL",
+        "target_status": "VULNERABLE (SAT)",
+        "patched_status": "SECURED (UNSAT)",
+        "description": "Cửa sau gài sẵn DEBUG_BYPASS_999 cho phép kẻ tấn công leo quyền Admin không cần xác thực"
+    },
+    {
+        "cwe_id": "CWE-120 / CWE-122",
+        "fault_name": "Buffer Copy without Checking Size (Buffer Overflow)",
+        "severity": "CRITICAL",
+        "target_status": "VULNERABLE (SAT)",
+        "patched_status": "SECURED (UNSAT)",
+        "description": "Sao chép bộ đệm khi payload_len > 128 gây sập dịch vụ từ chối phục vụ (MemoryError DoS)"
+    },
+    {
+        "cwe_id": "CWE-190",
+        "fault_name": "Integer Overflow or Wraparound",
+        "severity": "HIGH",
+        "target_status": "VULNERABLE (SAT)",
+        "patched_status": "SECURED (UNSAT)",
+        "description": "Phép tính offset 6 + (payload_len * 4) bị tràn số nguyên 16-bit khi payload_len >= 16384"
+    },
+    {
+        "cwe_id": "CWE-119 / CWE-787",
+        "fault_name": "Improper Hardware Memory Alignment",
+        "severity": "MEDIUM",
+        "target_status": "VULNERABLE (SAT)",
+        "patched_status": "SECURED (UNSAT)",
+        "description": "Con trỏ offset 6 + 4N luôn chia 4 dư 2, vi phạm chuẩn căn chỉnh 4-byte bộ nhớ vi xử lý"
+    },
+    {
+        "cwe_id": "CWE-1284",
+        "fault_name": "Improper Validation of Input Quantity",
+        "severity": "MEDIUM",
+        "target_status": "VULNERABLE (AST Warning)",
+        "patched_status": "SECURED (Safe Guard)",
+        "description": "Kiểm tra độ dài gói tin < 6 byte không đảm bảo đủ 38 byte để đọc an toàn trường Token"
+    }
+]
+
+def display_fault_classification_model():
+    print("\n[PHẦN 0] MÔ HÌNH PHÂN LOẠI LỖI AN TOÀN PHẦN MỀM (FAULT CLASSIFICATION MODEL - CWE):")
+    row_fmt = "{:<16} | {:<42} | {:<10} | {:<18} | {:<18}"
+    print(row_fmt.format("Chuẩn CWE", "Tên phân loại lỗi an toàn", "Mức độ", "Target Gateway", "Generated Gateway"))
+    print("-" * 115)
+    for f in FAULT_CLASSIFICATION_MODEL:
+        print(row_fmt.format(f["cwe_id"], f["fault_name"][:40], f["severity"], f["target_status"], f["patched_status"]))
+    print("-" * 115)
+
 class GatewayStaticASTAnalyzer(ast.NodeVisitor):
     def __init__(self, filename):
         self.filename = filename
@@ -33,6 +85,7 @@ class GatewayStaticASTAnalyzer(ast.NodeVisitor):
             val_str = str(node.value)
             if "DEBUG_BYPASS" in val_str or "BYPASS" in val_str:
                 self.issues.append({
+                    "cwe": "CWE-287/798",
                     "type": "HARDCODED_BACKDOOR",
                     "severity": "CRITICAL",
                     "line": node.lineno,
@@ -47,6 +100,7 @@ class GatewayStaticASTAnalyzer(ast.NodeVisitor):
             if (isinstance(left, ast.Constant) and left.value == 6) or \
                (isinstance(right, ast.Constant) and right.value == 6):
                 self.issues.append({
+                    "cwe": "CWE-119",
                     "type": "MISALIGNED_OFFSET_CALC",
                     "severity": "HIGH",
                     "line": node.lineno,
@@ -72,6 +126,7 @@ class GatewayStaticASTAnalyzer(ast.NodeVisitor):
     def _check_architectural_guards(self):
         if not self.has_early_bound_check:
             self.issues.append({
+                "cwe": "CWE-120/122",
                 "type": "MISSING_EARLY_BOUNDS_CHECK",
                 "severity": "HIGH",
                 "line": 0,
@@ -79,6 +134,7 @@ class GatewayStaticASTAnalyzer(ast.NodeVisitor):
             })
         if not self.has_full_packet_guard:
             self.issues.append({
+                "cwe": "CWE-1284",
                 "type": "INSUFFICIENT_LENGTH_GUARD",
                 "severity": "MEDIUM",
                 "line": 0,
@@ -96,7 +152,7 @@ def run_ast_analysis_on_file(filepath):
     return analyzer.issues
 
 def verify_smt_integer_overflow():
-    print("\n[MỤC TIÊU SMT 1] KIỂM CHỨNG TRÀN SỐ NGUYÊN (INTEGER OVERFLOW)")
+    print("\n[MỤC TIÊU SMT 1] KIỂM CHỨNG TRÀN SỐ NGUYÊN (INTEGER OVERFLOW - CWE-190)")
     solver_target = Solver()
     n_16 = BitVec("n_16", 16)
     off_16 = BitVecVal(6, 16) + (n_16 * BitVecVal(4, 16))
@@ -122,7 +178,7 @@ def verify_smt_integer_overflow():
         print("     [+] Chứng minh hình thức thành công: Điều kiện n <= 128 triệt tiêu hoàn toàn tràn số nguyên.")
 
 def verify_smt_memory_alignment():
-    print("\n[MỤC TIÊU SMT 2] KIỂM CHỨNG CĂN CHỈNH BỘ NHỚ 4 BYTES (MEMORY ALIGNMENT)")
+    print("\n[MỤC TIÊU SMT 2] KIỂM CHỨNG CĂN CHỈNH BỘ NHỚ 4 BYTES (MEMORY ALIGNMENT - CWE-119)")
     solver_target = Solver()
     n_align = BitVec("n_align", 32)
     off_target = BitVecVal(6, 32) + (n_align * BitVecVal(4, 32))
@@ -142,7 +198,7 @@ def verify_smt_memory_alignment():
         print("     [+] Chứng minh hình thức thành công: Bổ sung 2B padding (offset base 8) bảo đảm căn chỉnh 4 bytes tuyệt đối.")
 
 def verify_smt_buffer_overflow():
-    print("\n[MỤC TIÊU SMT 3] KIỂM CHỨNG TÍNH KHẢ ĐẠT CỦA TRÀN BỘ ĐỆM (BUFFER OVERFLOW REACHABILITY)")
+    print("\n[MỤC TIÊU SMT 3] KIỂM CHỨNG TÍNH KHẢ ĐẠT CỦA TRÀN BỘ ĐỆM (BUFFER OVERFLOW - CWE-120/122)")
     solver_target = Solver()
     p_len = BitVec("p_len", 16)
     p_len_ext = ZeroExt(16, p_len)
@@ -163,7 +219,7 @@ def verify_smt_buffer_overflow():
         print("     [+] Chứng minh hình thức thành công: Guard kiểm tra trước triệt tiêu hoàn toàn khả năng tràn bộ đệm.")
 
 def verify_smt_authentication_bypass():
-    print("\n[MỤC TIÊU SMT 4] KIỂM CHỨNG BẤT BIẾN XÁC THỰC (AUTHENTICATION BYPASS INVARIANT)")
+    print("\n[MỤC TIÊU SMT 4] KIỂM CHỨNG BẤT BIẾN XÁC THỰC (AUTHENTICATION BYPASS - CWE-287/798)")
     solver_target = Solver()
     tok_type = BitVec("tok_type", 4)
     target_granted = Or(tok_type == BitVecVal(1, 4), tok_type == BitVecVal(2, 4))
@@ -189,6 +245,8 @@ def run_static_testing():
     print("GIAI ĐOẠN 2: KIỂM THỬ TĨNH (STATIC TESTING: AST & FORMAL SMT VERIFICATION)")
     print("=" * 90)
 
+    display_fault_classification_model()
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     target_file = os.path.join(base_dir, "target_gateway.py")
     gen_file = os.path.join(base_dir, "generated_gateway.py")
@@ -198,7 +256,7 @@ def run_static_testing():
     target_issues = run_ast_analysis_on_file(target_file)
     for iss in target_issues:
         line_info = f"Dòng {iss['line']}" if iss['line'] > 0 else "Kiến trúc"
-        print(f"      - [{iss['severity']}] {line_info}: {iss['type']} -> {iss['detail']}")
+        print(f"      - [{iss['severity']}] [{iss['cwe']}] {line_info}: {iss['type']} -> {iss['detail']}")
 
     print(f"\n  [*] Phân tích tệp mã nguồn sinh an toàn: {os.path.basename(gen_file)}")
     gen_issues = run_ast_analysis_on_file(gen_file)
@@ -215,16 +273,16 @@ def run_static_testing():
     verify_smt_authentication_bypass()
 
     print("\n" + "=" * 90)
-    print("BẢNG TỔNG KẾT SO SÁNH KIỂM THỬ TĨNH")
+    print("BẢNG TỔNG KẾT SO SÁNH KIỂM THỬ TĨNH VÀ MÔ HÌNH PHÂN LOẠI LỖI")
     print("=" * 90)
-    row_fmt = "{:<30} | {:<25} | {:<25}"
+    row_fmt = "{:<32} | {:<25} | {:<25}"
     print(row_fmt.format("Hạng mục kiểm thử tĩnh", "Target Gateway (Gốc)", "Generated Gateway (Sinh ra)"))
     print("-" * 90)
-    print(row_fmt.format("Cửa sau xác thực (Backdoor)", "Phát hiện (CRITICAL)", "Đã loại bỏ (SAFE)"))
-    print(row_fmt.format("Tràn số nguyên Offset", "Khả đạt vi phạm (SAT)", "Chứng minh an toàn (UNSAT)"))
-    print(row_fmt.format("Căn chỉnh bộ nhớ 4-byte", "Vi phạm số dư = 2 (UNSAT)", "Bảo đảm căn chỉnh (UNSAT)"))
-    print(row_fmt.format("Tràn bộ đệm (MemoryError)", "Khả đạt (SAT)", "Triệt tiêu hoàn toàn (UNSAT)"))
-    print(row_fmt.format("Độ dài gói tin tối thiểu", "Kiểm tra thiếu (< 6)", "Đầy đủ quy chuẩn (>= 38)"))
+    print(row_fmt.format("Cửa sau xác thực (CWE-287/798)", "Phát hiện (CRITICAL)", "Đã loại bỏ (SAFE)"))
+    print(row_fmt.format("Tràn số nguyên Offset (CWE-190)", "Khả đạt vi phạm (SAT)", "Chứng minh an toàn (UNSAT)"))
+    print(row_fmt.format("Căn chỉnh bộ nhớ (CWE-119)", "Vi phạm số dư = 2 (UNSAT)", "Bảo đảm căn chỉnh (UNSAT)"))
+    print(row_fmt.format("Tràn bộ đệm (CWE-120/122)", "Khả đạt (SAT)", "Triệt tiêu hoàn toàn (UNSAT)"))
+    print(row_fmt.format("Độ dài gói tin (CWE-1284)", "Kiểm tra thiếu (< 6)", "Đầy đủ quy chuẩn (>= 38)"))
     print("=" * 90)
 
 if __name__ == "__main__":
